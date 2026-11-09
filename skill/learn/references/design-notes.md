@@ -121,8 +121,28 @@ questioning shows it is known well).
 Not borrowed:
 - full curricula and roadmaps, and gating on 80% mastery: the flows lesson, and the unit here is a
   session;
-- HTML lesson generation: that is reading material;
-- SM-2 ease factors: a fixed 1/3/7/21-day ladder is enough until real data says otherwise.
+- (superseded) HTML lesson generation was rejected as "reading material"; study pages are now built in
+  prep with per-answer Submit boxes and gated explanations;
+- (superseded) SM-2 ease factors were rejected for a fixed 1/3/7/21-day ladder; the scheduler is now FSRS
+  with again/hard/good/easy grades.
+
+### Second harvest (2026-11-09)
+
+148 ideas from 15 public tutor repos, filtered by two outside model reviews (Astra and Fable; the
+candidate list and the reviews are private notes, not published).
+Adopted:
+- grade the unaided answer on four grades; a hint-dependent recall is `again` (both reviewers; Astra's form);
+- `review result --retry`: the repair after reteaching is history, not a review (Astra);
+- one source for numbers: `DOC_PINS` in `learn.py selftest` pins the doc phrases to the constants, and
+  explicit first-due dates obey the `MIN_GAP_DAYS` floor unless `--allow-soon` says why;
+- `check_explanations.py --calibrate`: the DeepSeek checklist reviewer measured on labelled fixtures;
+- an accuracy item in the DeepSeek checklist and the Astra prep checklist;
+- review fingerprints (`learn.py stamp`): ready-check fails a block changed since its Astra review;
+- prose: completion problems (fading), generated numbers come from code that ran, slip vs misconception,
+  look at the figure image, grade the answer not the claim, a self-explanation box per reading brief.
+
+Deferred ideas wait for named triggers; misgrade correction (`review amend`) waits for an actual
+misrecorded grade.
 
 ## Out of scope / later
 

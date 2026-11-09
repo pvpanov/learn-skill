@@ -5,9 +5,11 @@ happens in a case they have not seen, and say why.
 
 ## Loop: predict, observe, explain
 
-1. **Elicit their model first.** Before you teach anything, the owner sketches how they think it
-   works: a causal chain or diagram in words, plus one prediction with confidence. Misconceptions
-   surface here; that's the point.
+1. **Elicit their model first, when they have one to test.** If the owner already knows something
+   about the mechanism, they sketch how they think it works before you teach: a causal chain or
+   diagram in words, plus one prediction with confidence. Misconceptions surface here; that's the
+   point. If they have nothing to sketch, teach first (SKILL.md: "Attempt first when it pays") and
+   use the prediction on the first contrasting case instead.
 2. **Contrasting cases.** Give two situations that differ in one factor and have them predict both
    outcomes. Contrasts expose which variables their model actually uses.
 3. **Observe.** Show the outcome in the cheapest form that is still honest:
@@ -20,7 +22,8 @@ happens in a case they have not seen, and say why.
    same breath, side by side. Revision needs both active at once. Then they repair their model in
    their own words.
 5. **Fresh case.** They predict a new situation without help. Getting it right means the repair
-   held.
+   held. If the jump is too large, put a completion problem in between: you set up the case and
+   leave one causal step for them, then give the fresh case (borrow review, 2026-11-09).
 
 ## Building things
 

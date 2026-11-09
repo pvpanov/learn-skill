@@ -1,0 +1,9 @@
+<!doctype html><html><body>
+<div class="box" data-explain="D1">
+  <p data-role="why">You are training a small neural network on a few thousand rows, it overfits after a handful of epochs, and you have to decide whether to add dropout or simply stop training earlier. Knowing what dropout actually does tells you when it is worth its cost in training time.</p>
+  <p data-role="example">Take a concrete case: a network with one hidden layer of 100 units, trained with a dropout rate of 0.5, so on every training step each hidden unit is switched off with probability one half and the surviving activations are scaled up by 2.</p>
+  <p>Dropout is equivalent to training an ensemble of \(2^{100}\) separate networks and averaging their predictions at test time, so it gets the full benefit of a very large ensemble for the price of one network. That is why it reduces overfitting so well in the example: the \(2^{100}\) subnetworks each overfit in different ways, and averaging cancels those errors out. At test time you switch every unit back on, and the output is exactly the ensemble average of all the subnetworks.</p>
+  <p>The takeaway for your small network: add dropout of 0.5 on the hidden layer before you try anything else, because an exact ensemble of that size is far stronger than early stopping could ever be, and it costs nothing extra at prediction time.</p>
+</div>
+<div class="box ask"><textarea data-q="Ask: D1"></textarea></div>
+</body></html>

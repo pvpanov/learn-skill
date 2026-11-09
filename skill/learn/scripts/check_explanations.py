@@ -3,6 +3,7 @@
 
     python check_explanations.py <page.html>            # mechanical checks; exit 1 on any FAIL
     python check_explanations.py --review <page.html>   # mechanical, then a model review per block (ai ask ds)
+    python check_explanations.py --calibrate [--runs N]   # the --review model on labelled fixtures (DS calls)
     python check_explanations.py --selftest
 
 Markup: every explanation block (a box that teaches: definitions, mechanism, formulas) carries
@@ -29,6 +30,7 @@ same day: "a bunch of factoids/high level logic; no textbook is structured like 
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -49,7 +51,8 @@ MIN_AVG_WORDS = 25   # average words per <p> in a block (inline math counts as o
 MAX_LIST_SHARE = 0.5  # share of block text allowed inside <li>
 AI_MJS = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
                                        "plugins", "ai-hub", "bin", "ai.mjs"))
-USAGE = "usage: check_explanations.py [--review] <page.html> | --selftest"
+USAGE = "usage: check_explanations.py [--review] <page.html> | --calibrate [--runs N] | --selftest"
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests", "explain-fixtures", "topics", "demo")
 
 
 class Block:
@@ -258,8 +261,7 @@ def check(path: str) -> tuple[int, list[str], list[Block], str]:
     return (1 if fails else 0), fails, blocks, text
 
 
-CHECKLIST = """You review one explanation block from a study page for a single learner. The learner is
-technically strong (ML, statistics, quantitative modelling) and studies papers to use them in their own work. Their
+CHECKLIST = """You review one explanation block from a study page for a single learner. {LEARNER} Their
 stated rules: theory needs motivation first, with examples before or while going through it, otherwise "why learn
 this" and they drift; an explanation must read like a textbook section, connected exposition, never "a bunch of
 factoids/high level logic"; "don't overcompress the material". Formal proofs are NOT wanted unless the learner
@@ -269,11 +271,13 @@ The block is HTML; formulas are TeX between backslash-[ ... backslash-] (display
 
 Judge each item, in order, PASS or FAIL with a reason that quotes the block:
 1. MOTIVATION FIRST: the opening paragraph poses the question in the learner's own world (why they would care,
-   e.g. a modelling decision in their own work), not a definition, a notation line or a bare claim.
+   e.g. a decision or situation from the topic goal above), not a definition, a notation line or a bare claim.
 2. EXAMPLE AT ONCE: one concrete running example is introduced immediately after (within the first two or three
    paragraphs), before the general statement, and it actually shows the concept (not answerable by recall).
-3. INTERLEAVED, WITH NUMBERS: the theory is interleaved with that same example, and the example is worked through
-   with actual numbers. Every formula or definition is followed by what it means in the example. Any formula or
+3. INTERLEAVED, WORKED CONCRETELY: the theory is interleaved with that same example, and the example is worked
+   through concretely: with actual numbers when the topic is quantitative (formulas, quantities), with actual
+   words, actions and situations when it is not (language, conversation, skills); do not demand numbers for a
+   block with no quantities in it. Every formula or definition is followed by what it means in the example. Any formula or
    definition that never goes back to the example is a FAIL; so is a run of two or more definitions or formulas
    with no example between them; so is an example that appears only at the end.
 4. EVERY STEP: Would a learner new to this follow every step? Is every term defined before it is used? Is any
@@ -283,10 +287,34 @@ Judge each item, in order, PASS or FAIL with a reason that quotes the block:
    from the previous one and says why? A list of conclusions, terse one-line claims, or overcompressed
    paragraphs is a FAIL. Bullets are fine only as a summary after the exposition.
 6. TAKEAWAY: the block ends with what it changes for the learner's decision (what to do or choose differently).
+7. ACCURACY: every claim, formula, number and piece of arithmetic in the block is correct, and each conclusion
+   follows from what the block states. Recompute the example's arithmetic. A wrong mechanism, formula or number
+   is a FAIL however well the block is written; so is a strong claim ("exactly", "equivalent", "always") that
+   is only approximately or sometimes true.
 
 Then a final line that is exactly "VERDICT: PASS" or "VERDICT: FAIL". FAIL if any item fails. If it fails,
 add one line "REWRITE:" naming the smallest change (which paragraph to move, add or expand).
 """
+def learner_context(path: str) -> str:
+    """Topic context for the review, from topics/<slug>/meta.json next to the page (lea-2: was TabPFN-only)."""
+    parts = os.path.abspath(path).replace(os.sep, "/").split("/")
+    if "topics" in parts:
+        i = len(parts) - 1 - parts[::-1].index("topics")
+        if i + 1 < len(parts):
+            meta = "/".join(parts[:i + 2]) + "/meta.json"
+            try:
+                with open(meta, encoding="utf-8") as f:
+                    m = json.load(f)
+                goal = (m.get("goal") or "").strip()
+                kind = (m.get("type") or "").strip()
+                if goal:
+                    return (f"The topic is '{parts[i + 1]}'" + (f" ({kind})" if kind else "")
+                            + f"; the learner's goal for it: {goal}")
+            except (OSError, ValueError):
+                pass
+    return "The topic and the learner's goal are not recorded; judge against the page's own framing."
+
+
 PROMPT = ("Review the attached explanation block against the attached checklist. Follow the checklist output "
           "format exactly and end with the VERDICT line.")
 VERDICT_RE = re.compile(r"^\W*VERDICT\W*(PASS|FAIL)\b", re.IGNORECASE | re.MULTILINE)
@@ -298,6 +326,26 @@ def ai_cmd() -> list[str] | None:
         return [node, AI_MJS]  # direct: no cmd.exe quoting of the prompt
     ai = shutil.which("ai")
     return [ai] if ai else None
+
+
+def review_block(base: list[str], checklist: str, src: str, workdir: str, tag: str) -> tuple[str, str, int, str]:
+    """One model review of one block: (PASS|FAIL|ERROR, model output, exit code, stderr)."""
+    bp = os.path.join(workdir, f"block-{tag}.html")
+    with open(bp, "w", encoding="utf-8", newline="") as f:
+        f.write(src + chr(10))
+    cmd = base + ["ask", "ds", "@" + checklist.replace(os.sep, "/"), "@" + bp.replace(os.sep, "/"), PROMPT]
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out = (r.stdout or "").strip()
+    hits = VERDICT_RE.findall(out)
+    verdict = hits[-1].upper() if hits and r.returncode == 0 else "ERROR"
+    return verdict, out, r.returncode, (r.stderr or "").strip()
+
+
+def write_checklist(workdir: str, page: str, name: str = "checklist.md") -> str:
+    cl = os.path.join(workdir, name)
+    with open(cl, "w", encoding="utf-8", newline="") as f:
+        f.write(CHECKLIST.replace("{LEARNER}", learner_context(page)))
+    return cl
 
 
 def review(path: str) -> int:
@@ -313,33 +361,77 @@ def review(path: str) -> int:
     worst = rc
     d = tempfile.mkdtemp(prefix="check_explanations_")
     try:
-        cl = os.path.join(d, "checklist.md")
-        with open(cl, "w", encoding="utf-8", newline="") as f:
-            f.write(CHECKLIST)
+        cl = write_checklist(d, path)
         for i, b in enumerate(blocks, 1):
             if b.id in bad:
                 print(f"REVIEW {b.id} (line {b.line}): SKIPPED, fix the mechanical failures first")
                 worst = 1
                 continue
-            bp = os.path.join(d, f"block-{i}.html")
-            with open(bp, "w", encoding="utf-8", newline="") as f:
-                f.write(text[b.start:b.end] + "\n")
-            cmd = base + ["ask", "ds", "@" + cl.replace(os.sep, "/"), "@" + bp.replace(os.sep, "/"), PROMPT]
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-            out = (r.stdout or "").strip()
-            hits = VERDICT_RE.findall(out)
-            verdict = hits[-1].upper() if hits and r.returncode == 0 else "ERROR"
+            verdict, out, code, err = review_block(base, cl, text[b.start:b.end], d, str(i))
             if verdict != "PASS":
                 worst = 1
             print(f"REVIEW {b.id} (line {b.line}): {verdict}")
-            for ln in (out or (r.stderr or "").strip()).splitlines():
+            for ln in (out or err).splitlines():
                 print("    " + ln)
             if verdict == "ERROR":
-                print(f"    (ai ask exit {r.returncode}; no VERDICT line)")
+                print(f"    (ai ask exit {code}; no VERDICT line)")
     finally:
         shutil.rmtree(d, ignore_errors=True)
     print("review: FAIL (rewrite the failing blocks; do not publish)" if worst else "review: OK")
     return worst
+
+
+def calibrate(runs: int) -> int:
+    """Measure the --review model on labelled fixtures (Astra/Fable borrow review, 2026-11-09: the cheap reviewer
+    was never shown to catch what it is meant to catch). good-*.html must PASS, bad-*.html must FAIL; every
+    fixture passes the mechanical gate, so only the model's judgement is measured. Rerun after changing the
+    checklist or the reviewer model."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    base = ai_cmd()
+    if not base:
+        print("FAIL: calibrate: neither node + ai.mjs nor `ai` found")
+        return 1
+    names = sorted(n for n in os.listdir(FIXTURES) if n.endswith(".html") and n.startswith(("good-", "bad-")))
+    jobs, rc, results = [], 0, []
+    d = tempfile.mkdtemp(prefix="check_explanations_cal_")
+    try:
+        for n in names:
+            path = os.path.join(FIXTURES, n)
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            fails, _warns, blocks = scan(text)
+            if fails or len(blocks) != 1:
+                print(f"FAIL fixture {n}: must be one block that passes the mechanical gate: {fails or len(blocks)}")
+                rc = 1
+                continue
+            cl = write_checklist(d, path, f"checklist-{n}.md")
+            src = text[blocks[0].start:blocks[0].end]
+            jobs += [(n, k, cl, src) for k in range(runs)]
+        with ThreadPoolExecutor(max_workers=min(6, len(jobs) or 1)) as ex:
+            results = list(ex.map(lambda j: (j[0], review_block(base, j[2], j[3], d, f"{j[0]}-{j[1]}")), jobs))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    by: dict[str, list[tuple[str, str]]] = {}
+    for n, (verdict, out, _code, err) in results:
+        by.setdefault(n, []).append((verdict, out or err))
+    fp = ff = errs = stable = 0
+    for n, rs in by.items():
+        want = "PASS" if n.startswith("good-") else "FAIL"
+        verdicts = [v for v, _ in rs]
+        wrong = [o for v, o in rs if v != want]
+        fp += sum(v == "PASS" for v in verdicts) if want == "FAIL" else 0
+        ff += sum(v == "FAIL" for v in verdicts) if want == "PASS" else 0
+        errs += verdicts.count("ERROR")
+        stable += len(set(verdicts)) == 1
+        print(f"{'OK  ' if not wrong else 'MISS'} {n}: want {want}, got {' '.join(verdicts)}")
+        if wrong:
+            print("    first mismatching review:")
+            for ln in wrong[0].splitlines():
+                print("      " + ln)
+    print(f"calibrate: {len(by)} fixture(s) x {runs} run(s): false passes {fp}, false fails {ff}, errors {errs}, "
+          f"repeatable {stable}/{len(by)}")
+    return 1 if rc or fp or ff or errs or not results else 0
 
 
 P_LONG = ("The point of this paragraph is to carry the reasoning in connected prose, so that each step is said "
@@ -448,6 +540,17 @@ def selftest() -> int:
         if rc == 0 or missing or unexpected:
             ok = False
             print(f"selftest: misc page rc={rc}, missing {missing}, unexpected {unexpected}:" + chr(10) + out)
+        # Calibration fixtures must stay mechanically clean, so --calibrate measures only the model's judgement.
+        fixtures = sorted(n for n in os.listdir(FIXTURES) if n.endswith(".html"))
+        for n in fixtures:
+            with open(os.path.join(FIXTURES, n), encoding="utf-8") as f:
+                fx_fails, _, fx_blocks = scan(f.read())
+            if fx_fails or len(fx_blocks) != 1:
+                ok = False
+                print(f"selftest: fixture {n} must be one mechanically clean block: {fx_fails}")
+        if not any(n.startswith("good-") for n in fixtures) or not any(n.startswith("bad-") for n in fixtures):
+            ok = False
+            print(f"selftest: calibration needs good-* and bad-* fixtures in {FIXTURES}")
         m = VERDICT_RE.findall("1. PASS" + chr(10) + "**VERDICT: FAIL**" + chr(10))
         if m != ["FAIL"]:
             ok = False
@@ -461,6 +564,13 @@ def selftest() -> int:
 def main(argv: list[str]) -> int:
     if argv == ["--selftest"]:
         return selftest()
+    if argv and argv[0] == "--calibrate":
+        if len(argv) == 1:
+            return calibrate(1)
+        if len(argv) == 3 and argv[1] == "--runs" and argv[2].isdigit() and int(argv[2]) > 0:
+            return calibrate(int(argv[2]))
+        print(USAGE)
+        return 2
     args = list(argv)
     rev = "--review" in args
     if rev:

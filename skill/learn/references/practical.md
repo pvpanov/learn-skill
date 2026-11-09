@@ -121,7 +121,9 @@ what they did with what they rehearsed. Real conversations count for more than r
   Correct directly, with no hint, for: unfamiliar fixed expressions, typos outside the target, constructions not
   yet taught, and a repair that failed within the bounds. One "ready" covers the whole batch. If feedback lands
   after the session, the repair moves into the next session's focused block.
-- **Check schedule** (replaces the 1/3/7/14/30 ladder for language): immediate check = "immediate transfer";
+- **Check schedule** for the Drill Book's corrected patterns (replaces the 1/3/7/14/30 ladder for language). This is
+  the language-drill schedule, kept on the page; it is separate from `learn.py review` items, which keep their own
+  floor (never sooner than 2 days). Immediate check = "immediate transfer";
   next session (24–48 h) a cold, short production before notes; about 1 week later in another topic or format;
   about 3 weeks later inside a communicative task. Add a day-3 check only after a failed or hint-dependent
   next-day check. A failed immediate check: explain the contrast, no near-identical items, and an easier cold

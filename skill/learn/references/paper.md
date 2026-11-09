@@ -52,8 +52,9 @@ aim.
    - S: scenario or extrapolation.
    
    You interrogate one figure or table at a time: "What would this plot look like if the claim were
-   false?" Use the confident-wrong student here: misread a figure plausibly and make them correct
-   you.
+   false?" Look at the figure itself (the image, not only its caption or the text around it) before you
+   ask about it, and quote axes, scales and error bars as drawn (borrow review, 2026-11-09). Use the
+   confident-wrong student here: misread a figure plausibly and make them correct you.
 4. **Pass 3, rebuild (selective).** The owner re-derives the key step, or designs the minimal
    experiment that would test the claim, using the authors' assumptions. If a reproduction is worth
    running, you write the code (tiny, CPU-capped); they predict the result first and interpret it.
@@ -64,6 +65,11 @@ aim.
 prior → training objective → architecture and data flow → inference → transfer limits. Each step: a
 guided read of one short passage with a focus question (glossary first, paper-specific jargon only),
 a worked trace the tutor starts and the owner completes, then an application to the owner's setting.
+
+**Self-explanation while reading** (Fable borrow review, 2026-11-09; Chi et al. 1994). Every reading brief,
+in any route, ends with one answer box that asks the owner to explain a specific passage in their own words:
+why this step is needed, or what it implies for their setting. Name the passage; "summarise the section" is
+not a self-explanation prompt. Grade it like any answer: right reasoning, the gap named, no praise.
 Benchmark critique enters only when it answers a question in that chain. No decision memo until the
 mechanism is understood.
 

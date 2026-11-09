@@ -89,8 +89,9 @@ def render(page: Path) -> tuple[int, str]:
                 return 1, f"FAIL local script {src} not found beside the page or in assets/"
             (t / src).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(found, t / src)
-        if re.search(r"(?i)<head[^>]*>", html):
-            doc = re.sub(r"(?i)(<head[^>]*>)", lambda m: m.group(1) + STUB, html, count=1)
+        # <head> or <head attr=...>, never <header> (lea-3: the stub landed mid-body on the Dutch page)
+        if re.search(r"(?i)<head(?=[\s>])[^>]*>", html):
+            doc = re.sub(r"(?i)(<head(?=[\s>])[^>]*>)", lambda m: m.group(1) + STUB, html, count=1)
         else:
             doc = '<!doctype html><html><head><meta charset="utf-8">' + STUB + "</head><body>" + html + "</body></html>"
         doc = re.sub(r"(?i)</body>", DRIVER + "</body>", doc, count=1) if re.search(r"(?i)</body>", doc) else doc + DRIVER

@@ -23,7 +23,10 @@ An agent without the connector leaves them pending and `status` shows the drift.
   python learn.py prep-check SLUG D [--page PATH] [--no-page-scripts]
   python learn.py review add --topic SLUG --prompt "..." --criterion "..." [--error "..."] [--evidence REF]
                              [--kind vocab|pattern|concept] [--due D | --first-due-days N]
-  python learn.py review result ID again|hard|good|easy [--note "..."]   (pass = good, fail = again)
+                             [--allow-soon "why"]   (a first due date sooner than MIN_GAP_DAYS is refused without it)
+  python learn.py review result ID again|hard|good|easy [--note "..."] [--retry]   (pass = good, fail = again;
+                             grade the unaided answer; --retry records a repair after reteaching, schedule unchanged)
+  python learn.py stamp SLUG --date D [--page PATH]     (after the Astra review: fingerprint the reviewed blocks)
   python learn.py review defer ID [--to D]          (default: 2 days after its last check)
   python learn.py review list [--due] [--topic SLUG]
   python learn.py plan [--days 7] [--now ISO]
@@ -281,7 +284,7 @@ def fsrs_migrate(row: dict) -> None:
     if "stability" in row:
         return
     graded = [(h["date"], GRADES.get(h.get("grade") or GRADE_ALIASES.get(h.get("result") or h.get("outcome"), "")))
-              for h in row.get("history", [])]
+              for h in row.get("history", []) if not h.get("retry")]
     graded = [(day, g) for day, g in graded if g]
     rung = row.pop("rung", 0) or 0
     row.setdefault("kind", "pattern")
@@ -403,11 +406,18 @@ def cmd_topic(st: State, args, now: dt.datetime) -> None:
 
 
 def first_due(args, today: dt.date) -> dt.date:
-    """--due wins; else --first-due-days; else 2 days for an item made from an error, 3 otherwise."""
+    """--due wins; else --first-due-days; else 2 days for an item made from an error, 3 otherwise.
+    Never sooner than MIN_GAP_DAYS (owner, f048) unless --allow-soon gives a reason (Astra borrow review,
+    2026-11-09: explicit dates silently bypassed the floor)."""
     if args.due:
-        return parse_day(args.due, today)
-    days = args.first_due_days or (FIRST_DUE_DAYS_ERROR if args.error else FIRST_DUE_DAYS)
-    return today + dt.timedelta(days=days)
+        day = parse_day(args.due, today)
+    else:
+        day = today + dt.timedelta(days=args.first_due_days or (FIRST_DUE_DAYS_ERROR if args.error else FIRST_DUE_DAYS))
+    floor = today + dt.timedelta(days=MIN_GAP_DAYS)
+    if day < floor and not args.allow_soon:
+        sys.exit(f"first due {day} is sooner than {floor} (MIN_GAP_DAYS {MIN_GAP_DAYS}: never the next morning, f048); "
+                 "pass --allow-soon \"<why>\" if it really must")
+    return day
 
 
 def cmd_review(st: State, args, today: dt.date) -> None:
@@ -419,6 +429,8 @@ def cmd_review(st: State, args, today: dt.date) -> None:
                "due": first_due(args, today).isoformat(),
                "kind": args.kind, "history": [], "status": "active", "state": "new", "stability": None,
                "difficulty": None, "last_review": None, "interval": None, "reps": 0, "lapses": 0}
+        if args.allow_soon:
+            row["allow_soon"] = args.allow_soon
         rows.append(row)
         write_jsonl(st.reviews_path, rows)
         print(f"{row['id']} due {row['due']}: {row['prompt']}")
@@ -427,6 +439,16 @@ def cmd_review(st: State, args, today: dt.date) -> None:
         if not row:
             sys.exit(f"no review {args.id}")
         grade = GRADE_ALIASES.get(args.outcome, args.outcome)
+        if args.retry:
+            # Repair, not retrieval (Astra borrow review, 2026-11-09): the retry after a miss and its reteaching is
+            # history only; the unaided grade recorded earlier today stands and the schedule does not move.
+            if not any(h["date"] == today.isoformat() and not h.get("retry") for h in row["history"]):
+                sys.exit(f"{row['id']}: --retry follows today's unaided grade; record that first")
+            row["history"].append({"date": today.isoformat(), "result": args.outcome, "grade": grade, "retry": True,
+                                   "note": args.note or ""})
+            write_jsonl(st.reviews_path, rows)
+            print(f"{row['id']}: retry {args.outcome} recorded (repair; schedule unchanged, due {row['due']})")
+            return
         entry = fsrs_review(row, grade, today)
         row["history"].append({"date": today.isoformat(), "result": args.outcome, **entry, "note": args.note or ""})
         write_jsonl(st.reviews_path, rows)
@@ -709,6 +731,66 @@ def astra_review_path(st: State, slug: str, day: dt.date) -> Path:
     return st.home / "tutor-reviews" / f"{day.isoformat()}-astra-prep-{slug}.md"
 
 
+# Review fingerprints (Astra borrow review, 2026-11-09): a review file existing does not show that the explanation
+# now on the page is the version that was reviewed. `stamp` records a hash per data-explain block once Astra has
+# reviewed it; ready-check fails a block whose text no longer matches its stamp.
+def explain_blocks(page: Path) -> dict[str, str]:
+    """{block id: sha256 prefix of its whitespace-normalised source}, using check_explanations' own scanner."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_explanations", SKILL_DIR / "scripts" / "check_explanations.py")
+    ce = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ce)
+    text = page.read_text(encoding="utf-8")
+    return {b.id: hashlib.sha256(" ".join(text[b.start:b.end].split()).encode("utf-8")).hexdigest()[:16]
+            for b in ce.scan(text)[2]}
+
+
+def stamps_path(st: State, slug: str) -> Path:
+    return st.topics_dir / slug / "reviewed-blocks.json"
+
+
+def stamp_findings(st: State, slug: str, page_path: Path) -> list[tuple[str, str]]:
+    blocks = explain_blocks(page_path)
+    if not blocks:
+        return []
+    stamps = read_json(stamps_path(st, slug), {}).get("blocks", {})
+    bad = [b for b, h in blocks.items() if stamps.get(b, {}).get("hash") != h]
+    if not bad:
+        return []
+    return [("FAIL", f"explanation block(s) {', '.join(bad)} changed since their Astra review, or were never reviewed: "
+                     "have Astra review them, then `learn.py stamp " + slug + " --date <day>`")]
+
+
+def cmd_stamp(st: State, args, today: dt.date) -> None:
+    day = parse_day(args.date, today)
+    meta = st.topic(args.slug)
+    page = find_page(st, args.slug, meta, args.page)
+    if page is None or not page.exists():
+        sys.exit(f"no study page for {args.slug}")
+    review = astra_review_path(st, args.slug, day)
+    if not args.baseline and not review.exists():
+        sys.exit(f"no Astra prep review {review}: stamp records what Astra reviewed")
+    rtext = review.read_text(encoding="utf-8") if review.exists() else ""
+    data = read_json(stamps_path(st, args.slug), {"blocks": {}})
+    old, new, keep, missing = data["blocks"], {}, [], []
+    for b, h in explain_blocks(page).items():
+        if old.get(b, {}).get("hash") == h:
+            new[b] = old[b]
+            keep.append(b)
+        elif re.search(rf"(?<![\w-]){re.escape(b)}(?![\w-])", rtext):
+            new[b] = {"hash": h, "date": day.isoformat(), "review": review.name}
+        elif args.baseline:
+            new[b] = {"hash": h, "date": day.isoformat(), "review": f"baseline: {args.baseline}"}
+        else:
+            missing.append(b)
+    if missing:
+        sys.exit(f"{review.name} does not name changed or new block(s) {', '.join(missing)}: have Astra review them first")
+    data["blocks"] = new
+    write_json(stamps_path(st, args.slug), data)
+    stamped = [b for b in new if b not in keep]
+    print(f"{args.slug}: stamped {', '.join(stamped) or 'nothing new'}" + (f"; unchanged {', '.join(keep)}" if keep else ""))
+
+
 def run_script(script: str, *argv: str) -> tuple[int | None, str]:
     path = SKILL_DIR / "scripts" / script
     if not path.exists():
@@ -739,12 +821,8 @@ def ready_findings(st: State, slug: str, day: dt.date, page: str | None = None) 
         rtext = review.read_text(encoding="utf-8")
         if len(rtext) < 400 or not re.search(r"(?i)\brevis", rtext):
             out.append(("FAIL", f"{review.name} must hold Astra's verdict and what was revised as a result"))
-        if page_path and page_path.exists():
-            blocks = re.findall(r'data-explain="([^"]+)"', page_path.read_text(encoding="utf-8"))
-            missing = [b for b in blocks if b not in rtext]
-            if missing:
-                out.append(("WARN", f"{review.name} does not mention explanation blocks {', '.join(missing)}: fine only if "
-                                    "they are unchanged since their last review"))
+    if page_path and page_path.exists():
+        out += stamp_findings(st, slug, page_path)
     if RUN_PAGE_SCRIPTS and page_path and page_path.exists():
         code, text = run_script("check_page.py", str(page_path))
         if code != 0:
@@ -1026,8 +1104,8 @@ def selftest() -> None:
 
         run("init")
         run("topic", "new", "tabpfn", "--type", "paper", "--goal", "judge TabPFN v2")
-        run("review", "add", "--topic", "tabpfn", "--prompt", "Why does the prior matter?", "--criterion", "names SCM prior", "--due", "tomorrow")
-        run("review", "add", "--topic", "tabpfn", "--prompt", "When does it fail?", "--criterion", "n>10k, many features", "--due", "today")
+        run("review", "add", "--topic", "tabpfn", "--prompt", "Why does the prior matter?", "--criterion", "names SCM prior", "--due", "tomorrow", "--allow-soon", "selftest")
+        run("review", "add", "--topic", "tabpfn", "--prompt", "When does it fail?", "--criterion", "n>10k, many features", "--due", "today", "--allow-soon", "selftest")
         run("topic", "next", "tabpfn", "--date", "today", "--minutes", "45", "--task", "pass 2")
         assert "Prep: pending" in build_plan(st, now, 7)[0]["description"]
         run("topic", "prep", "tabpfn", "--status", "blocked", "--note", "accept licence")
@@ -1079,7 +1157,30 @@ def selftest() -> None:
     selftest_fsrs(p)
     selftest_feedback(p)
     selftest_gate(p)
+    selftest_docs()
     print("selftest ok")
+
+
+# Numbers the docs state, pinned to the constants (Astra/Fable borrow review, 2026-11-09: prose drifts from the
+# script). Change a constant and these phrases together.
+DOC_PINS = [
+    ("SKILL.md", f"first comes due {FIRST_DUE_DAYS} days later, {FIRST_DUE_DAYS_ERROR} with `--error`"),
+    ("SKILL.md", f"`--first-due-days {FIRST_DUE_DAYS}` or more"),
+    ("SKILL.md", f"sooner than {MIN_GAP_DAYS} days"),
+    ("SKILL.md", f"answered in the last {MIN_GAP_DAYS} days"),
+    ("references/recurring-feedback.md", f"first due at {FIRST_DUE_DAYS} days ({FIRST_DUE_DAYS_ERROR} with `--error`)"),
+    ("references/recurring-feedback.md", f"`MIN_GAP_DAYS = {MIN_GAP_DAYS}`"),
+    ("scripts/learn.py", f"next interval would exceed {RETIRE_AFTER_DAYS} days"),
+]
+
+
+def selftest_docs() -> None:
+    missing = []
+    for rel, phrase in DOC_PINS:
+        text = " ".join((SKILL_DIR / rel).read_text(encoding="utf-8").split())
+        if phrase not in text:
+            missing.append(f"{rel}: {phrase!r}")
+    assert not missing, "docs drifted from the constants:\n  " + "\n  ".join(missing)
 
 
 def _capture(st: State, p: argparse.ArgumentParser, now: dt.datetime, *argv) -> tuple[int, str]:
@@ -1159,7 +1260,7 @@ def selftest_gate(p: argparse.ArgumentParser) -> None:
             # A review made on 11-08 (fine on 11-12) and one made on 11-11 (a next-day duplicate on 11-12).
             run("review", "add", "--topic", "pfn", "--prompt", "a", "--criterion", "c", at=dt.datetime(2026, 11, 8, 20))
             run("review", "add", "--topic", "pfn", "--prompt", "b", "--criterion", "c", "--due", "2026-11-12",
-                at=dt.datetime(2026, 11, 11, 20))
+                "--allow-soon", "selftest", at=dt.datetime(2026, 11, 11, 20))
             run("review", "add", "--topic", "pfn", "--prompt", "z", "--criterion", "c", "--due", "2026-11-20")
             write_text(d / "prep" / "2026-11-12.tutor-only.md",
                        "# key\n## Plan\n- r001 cold, in chat\n- r003 later\n## Likely mistakes\n- x\n")
@@ -1207,6 +1308,30 @@ def selftest_gate(p: argparse.ArgumentParser) -> None:
             review.unlink()
             code, out = run("topic", "prep", "pfn", "--status", "ready", "--override", "astra down")
             assert code == 0 and "override: astra down" in run("status")[1]
+            # Review fingerprints: an explanation block must match the version Astra reviewed (stamp).
+            block = lambda bid, body: (f'<div class="box" data-explain="{bid}"><p data-role="why">{body}</p></div>'
+                                       f'<div class="box ask"><textarea data-q="Ask: {bid}"></textarea></div>')
+            page = d / "page" / "pfn.html"
+            write_text(page, block("S1", "why one") + block("S9", "why nine") + '<textarea data-q="Q1"></textarea>')
+            code, out = run("ready-check", "pfn", "--date", "2026-11-12")
+            assert code == 1 and "S1, S9 changed since their Astra review" in out, out
+            code, out = run("stamp", "pfn", "--date", "2026-11-12")
+            assert code != 0 and "no Astra prep review" in out, out
+            write_text(review, "# Astra prep review\n" + "Verdict on S1: motivation first, example runs through. " * 10
+                       + "\n## Revised\n- S1 opening rewritten\n")
+            code, out = run("stamp", "pfn", "--date", "2026-11-12")
+            assert code != 0 and "does not name changed or new block(s) S9" in out, out
+            write_text(review, review.read_text(encoding="utf-8") + "- S9 reviewed, no change\n")
+            code, out = run("stamp", "pfn", "--date", "2026-11-12")
+            assert code == 0 and "stamped S1, S9" in out, out
+            code, out = run("ready-check", "pfn", "--date", "2026-11-12")
+            assert code == 0 and "changed since" not in out, out
+            write_text(page, block("S1", "why one, edited after the review") + block("S9", "why nine"))
+            code, out = run("ready-check", "pfn", "--date", "2026-11-12")
+            assert code == 1 and "block(s) S1 changed since" in out, out
+            code, out = run("stamp", "pfn", "--date", "2026-11-13", "--baseline", "selftest")
+            assert code == 0 and "stamped S1; unchanged S9" in out, out
+            assert read_json(st.topics_dir / "pfn" / "reviewed-blocks.json", {})["blocks"]["S1"]["review"] == "baseline: selftest"
     finally:
         RUN_PAGE_SCRIPTS = saved
 
@@ -1229,7 +1354,7 @@ def selftest_fsrs(p: argparse.ArgumentParser) -> None:
 
         def add(kind: str = "pattern") -> str:
             return run(day0, "review", "add", "--topic", "dutch", "--prompt", "p", "--criterion", "c",
-                       "--due", "today", "--kind", kind).split()[0]
+                       "--due", "today", "--kind", kind, "--allow-soon", "selftest").split()[0]
 
         run(day0, "init")
         run(day0, "topic", "new", "dutch", "--type", "practical", "--goal", "A2")
@@ -1245,7 +1370,15 @@ def selftest_fsrs(p: argparse.ArgumentParser) -> None:
         assert due_of() == "2026-11-05"
         assert due_of("--error", "missed one") == "2026-11-04"
         assert due_of("--error", "minor", "--first-due-days", "4") == "2026-11-06"
-        assert due_of("--due", "tomorrow") == "2026-11-03"
+        assert due_of("--due", "tomorrow", "--allow-soon", "selftest") == "2026-11-03"
+        # The floor holds for explicit dates too (Astra borrow review, 2026-11-09).
+        for extra in (("--due", "tomorrow"), ("--first-due-days", "1")):
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    due_of(*extra)
+                raise AssertionError(f"{extra}: a first due date sooner than MIN_GAP_DAYS must be refused")
+            except SystemExit as e:
+                assert "MIN_GAP_DAYS" in str(e.code), e.code
         try:
             with contextlib.redirect_stderr(io.StringIO()):
                 p.parse_args(["review", "add", "--topic", "dutch", "--prompt", "q", "--criterion", "c",
@@ -1254,7 +1387,7 @@ def selftest_fsrs(p: argparse.ArgumentParser) -> None:
         except SystemExit:
             pass
         rows = read_jsonl(st.reviews_path)
-        write_jsonl(st.reviews_path, rows[:-4])  # keep the ids below as they were
+        write_jsonl(st.reviews_path, rows[:-4])  # keep the ids below as they were (refused adds wrote nothing)
 
         # First review, each grade: again and hard 2 (MIN_GAP_DAYS floor; FSRS alone gives 1), good 2 days;
         # easy 8.3 days fuzzed into [6, 10].
@@ -1314,6 +1447,27 @@ def selftest_fsrs(p: argparse.ArgumentParser) -> None:
         run(day, "review", "result", rid, "again")  # a same-day re-fail in relearning is the same lapse
         assert row(rid)["lapses"] == lapses and row(rid)["history"][-1]["elapsed_days"] == 0
 
+        # Retry after a miss and reteaching (Astra borrow review, 2026-11-09): history only; the miss stands.
+        rid, day = add(), day0
+        run(day, "review", "result", rid, "good")
+        day = dt.date.fromisoformat(row(rid)["due"])
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                run(day, "review", "result", rid, "good", "--retry")
+            raise AssertionError("--retry without today's unaided grade must be refused")
+        except SystemExit:
+            pass
+        run(day, "review", "result", rid, "again")
+        after_miss = {k: row(rid)[k] for k in ("due", "stability", "difficulty", "reps", "lapses", "state")}
+        out = run(day, "review", "result", rid, "good", "--retry", "--note", "after reteaching")
+        r = row(rid)
+        assert {k: r[k] for k in after_miss} == after_miss and "schedule unchanged" in out, (after_miss, r)
+        assert r["history"][-1]["retry"] and r["history"][-2]["grade"] == "again", r["history"]
+        mig = dict(r, rung=1)
+        mig.pop("stability")
+        fsrs_migrate(mig)
+        assert mig["reps"] == 2, "retries are not counted as graded reviews"
+
         # Migration of ladder-era rows (`rung`, no `stability`), on first touch only.
         old = {"topic": "dutch", "criterion": "c", "error": "", "evidence": "", "due": "2026-11-02", "status": "active"}
         rows = read_jsonl(st.reviews_path) + [
@@ -1349,6 +1503,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init")
     sub.add_parser("selftest")
     s = sub.add_parser("status"); s.add_argument("--date"); s.add_argument("--topic")
+    x = sub.add_parser("stamp", help="record the reviewed explanation blocks' fingerprints (after the Astra review)")
+    x.add_argument("slug"); x.add_argument("--date", required=True); x.add_argument("--page")
+    x.add_argument("--baseline", metavar="WHY", help="stamp every current block without a review mention (bootstrap)")
     for name in ("prep-check", "ready-check"):
         x = sub.add_parser(name); x.add_argument("slug"); x.add_argument("date", nargs="?")
         x.add_argument("--date", dest="date_opt"); x.add_argument("--page", help="the study page (default: meta page, else newest .html)")
@@ -1372,7 +1529,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--first-due-days", type=int, choices=range(1, 31), metavar="N",
                    help=f"days until first due (default {FIRST_DUE_DAYS}, or {FIRST_DUE_DAYS_ERROR} with --error)")
     x.add_argument("--kind", choices=KINDS, default="pattern")
+    x.add_argument("--allow-soon", metavar="WHY", help=f"permit a first due date sooner than {MIN_GAP_DAYS} days (recorded)")
     x = r.add_parser("result"); x.add_argument("id"); x.add_argument("outcome", choices=(*GRADES, *GRADE_ALIASES)); x.add_argument("--note")
+    x.add_argument("--retry", action="store_true",
+                   help="a repair attempt after today's graded miss and reteaching: history only, schedule unchanged")
     x = r.add_parser("list"); x.add_argument("--due", action="store_true"); x.add_argument("--topic")
     x = r.add_parser("defer"); x.add_argument("id"); x.add_argument("--to", help=f"new due date (>= last check + {MIN_GAP_DAYS} days)")
 
@@ -1409,6 +1569,8 @@ def dispatch(st: State, args, now: dt.datetime) -> None:
         cmd_review(st, args, today)
     elif args.cmd == "feedback":
         cmd_feedback(st, args, today)
+    elif args.cmd == "stamp":
+        cmd_stamp(st, args, today)
     elif args.cmd == "plan":
         cmd_plan(st, args, dt.datetime.fromisoformat(args.now) if args.now else now)
     elif args.cmd == "cal":

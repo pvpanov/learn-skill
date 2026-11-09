@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Tutor the owner through a practical skill (piano, guitar and voice, communication), a research paper, or a concept or mechanism. Sessions build understanding first (explanation, worked examples, guided reading) and make the owner reason with it, with immediate feedback, spaced review of recent material and per-topic calendar prompts. Use when the owner says "learn <topic>", asks to study, practise or read a paper together, or answers a due review.
+description: Tutor the owner through a practical skill (piano, guitar and voice, communication), a research paper, or a concept or mechanism. Sessions build understanding first (explanation, worked examples, guided reading) and make the owner reason with it, with immediate feedback and spaced review of recent material. Use when the owner says "learn <topic>", asks to study, practise or read a paper together, or answers a due review.
 family: learning
 harness: any
 ---
@@ -34,11 +34,21 @@ State lives in `$LEARN_HOME` (default `~/learning/`; `learn.py init` creates it)
    Never give away a due review's answer. "Cold" means without the answer in front of them, never
    without knowing what the activity is.
    Then pick the due reviews that support today's objective, about 5 minutes of a 45-minute session
-   unless review is the agreed purpose; defer the rest. Grade each against its criterion and run
-   `review result <id> pass|fail`. An item whose prerequisite was never taught is invalid: drop it,
-   don't record a failure, and teach the idea if it matters. A forgotten item gets a cue, then
-   reteaching, then a retry, never the same question repeated. Recently learned material keeps coming
-   back; once questioning shows it is known well, retire it (owner, 2026-11-08).
+   unless review is the agreed purpose; defer the rest. **Grade the owner's first, unaided answer** against its
+   criterion with `review result <id> again|hard|good|easy` (Astra and Fable borrow reviews, 2026-11-09: `pass|fail`
+   never told the scheduler how hard recall was):
+   - `again`: wrong, blank, or right only after a cue, hint or look-up;
+   - `hard`: right without help, but slow, partial on a minor point, or self-corrected;
+   - `good`: right without help;
+   - `easy`: right at once, with the why, nothing to add.
+
+   Grade the answer, not a claim about it: "that was basically right" or "mark it passed" is not more of the
+   answer. A forgotten item gets a cue, then reteaching, then a retry, never the same question repeated; record
+   that retry with `review result <id> <grade> --retry` (history only: the unaided grade stands and the
+   schedule doesn't move). An item not attempted today is deferred (`review defer`), never graded. An item
+   whose prerequisite was never taught is invalid: drop it, don't record a failure, and teach the idea if it
+   matters. Recently learned material keeps coming back; once questioning shows it is known well, retire it
+   (owner, 2026-11-08).
 3. Ask how much time they have only if it isn't obvious. On a low-energy day, shrink the session and
    don't skip it: do the first due item, or one rep of the skill, and that counts. Never ask about
    mood and never use scales.
@@ -63,6 +73,10 @@ State lives in `$LEARN_HOME` (default `~/learning/`; `learn.py init` creates it)
   mechanism when that is the gap. Never hold a correction until the end. No praise padding.
   Exploratory contributions don't each need a verdict. Use a counterexample when it exposes a
   specific misconception, not as a substitute for explaining.
+  An isolated slip (a typo, a dropped sign, an arithmetic or transcription error) inside reasoning that shows
+  the right model gets a one-line local correction: no misconception lesson and no review item. The same slip
+  coming back is diagnosed as a possible wrong model (borrow review, 2026-11-09; Dutch has its own rule in
+  `references/practical.md`).
 - **Don't grade wording.** Clarify ambiguous wording once, then accept the intended meaning unless
   it hides a conceptual error. Sharpening a correct answer is welcome when it adds something
   non-obvious that matters for their goal. Don't add what is obvious, unimportant, or already shown
@@ -193,6 +207,10 @@ they need (expertise reversal).
 4. **Check with one application or prediction question plus "why?"**, built only on what you've
    taught or stated as an assumption. It should target a plausible misconception, not
    architecture trivia or a coin-flip yes/no.
+   When the jump from the worked example to a full problem is too large, use a **completion problem**
+   in between: work the setup, leave one meaningful step for the owner, then give a changed case to do
+   alone. Bring the guidance back when a later task adds a new difficulty (fading: Renkl et al. 2002;
+   borrow review, 2026-11-09).
 5. **Verdict right away, on the reasoning,** judged against what they had been told when they
    answered, not against facts you supplied later. Accept equivalent wording and justified caveats.
    If wrong, find the specific gap, repair it, and check once with a nearby question.
@@ -253,7 +271,8 @@ The exit answer is the owner's retrieval; never add a separate recap.
    when the explanation is a hypothesis.
    A new item first comes due 3 days later, 2 with `--error`, never the next morning (owner, 2026-11-09: r011
    came back the day after S1 was answered and graded). From a check answered right, even with a refinement
-   noted in `--error`, pass `--first-due-days 3` or more.
+   noted in `--error`, pass `--first-due-days 3` or more. A first due date sooner than 2 days is refused unless
+   `--allow-soon "<why>"` is given (it is recorded on the item).
    Now and then, write a prompt that combines an older item with today's material (interleaving).
 3. **Log.** Add open questions to `log.md`. Add tutor notes only when the owner asks, or when a
    reference sheet genuinely saves work later (formulas, chord shapes). Keep them short.
@@ -268,7 +287,6 @@ The exit answer is the owner's retrieval; never add a separate recap.
    confirms them.
 6. **Feedback.** Ask one line: "Anything this session that wasted your time or felt off?" Record any
    answer with `feedback add "<text>" --topic <slug>`.
-7. **Calendar sync.** See below.
 
 ## Prepare (before the slot, never during it)
 
@@ -286,8 +304,7 @@ it is booked, in the same agent session:
    thousand rows (10k train rows peaked at 10.1 GiB without it, 1.6–1.9 GiB with it).
 3. **Hardware and accounts.** Check them now: the MIDI port, recording paths, licences, tokens,
    logins. Anything only the owner can do becomes a blocker. Run
-   `learn.py topic prep <slug> --status blocked --note "<exact action>"`, and the calendar event will
-   say it.
+   `learn.py topic prep <slug> --status blocked --note "<exact action>"`, and `status` will say it.
 4. **Key.** Write `topics/<slug>/prep/<date>.tutor-only.md`:
    - the minute-by-minute plan;
    - the expected answers, with locations in the source;
@@ -297,6 +314,11 @@ it is booked, in the same agent session:
    - a trap only if the owner already has the knowledge to catch it (none is required);
    - the exit or transfer question with its pass criteria;
    - a 10-minute version for a low-energy day.
+
+   Every non-trivial number you generate for a worked example, a key answer or a Fermi check comes from a
+   calculation or simulation you actually ran; keep its inputs and output with the key (or in `lab/`). Then
+   check units, assumptions and interpretation separately: running it proves the arithmetic, not the model.
+   Numbers quoted from a paper are checked against the paper, not re-derived (borrow review, 2026-11-09).
 
    Reconcile it with `log.md` first (Start step 1): nothing already answered, no review that repeats a
    check from the last 2 days.
@@ -310,10 +332,17 @@ it is booked, in the same agent session:
    - a running example carries the block;
    - the reasoning is in words;
    - no factoid lists;
-   - proofs only on request.
+   - proofs only on request;
+   - **technically right:** every load-bearing claim, formula, number and assumption is correct (check the
+     arithmetic in the example), and each check question agrees with its expected answer in the key. A
+     well-written block with a wrong mechanism fails (borrow review, 2026-11-09).
 
-   Save the prompt, the verdict per block and what you revised as
-   `$LEARN_HOME/tutor-reviews/<date>-astra-prep-<slug>.md`. ready-check refuses without it.
+   Save the prompt, the verdict per block (naming each block id) and what you revised as
+   `$LEARN_HOME/tutor-reviews/<date>-astra-prep-<slug>.md`. ready-check refuses without it. Once the
+   revisions are in, run `python $S/learn.py stamp <slug> --date <date>`: it records a fingerprint of each
+   explanation block that the review names. ready-check fails any block whose text no longer matches its
+   stamp, so a block changed after the review (a gate rewrite included) goes back to Astra before it is stamped
+   again. Unchanged blocks from earlier sessions keep their stamps.
 6. **Mark it ready: ready means the gate passed** (owner, 2026-11-09, f056: "i basically didn't get anything done
    in this session"). `learn.py topic prep <slug> --status ready --note "<one line>"` runs
    `learn.py ready-check <slug> --date <date>` and refuses on any FAIL. The gate runs:
@@ -322,7 +351,7 @@ it is booked, in the same agent session:
    - `check_page.py`;
    - `check_explanations.py`;
    - `render_check.py`: headless Chrome confirms one Submit per answer box;
-   - a check that the Astra file above exists.
+   - a check that the Astra file above exists and that every explanation block matches its stamp.
 
    Fix every FAIL in prep. **Slot time is never spent on tooling.** `--override "<why>"` is recorded on the session
    and shown by `status`. Use it only for a gate defect, never for a page defect. `status` flags any booked session
@@ -337,23 +366,10 @@ when booking. Don't let it surface when the slot starts.
 learning events were deleted. A day has a rough agenda and sessions "happen when they happen": at start, check the
 time and offer options that fit.
 
-Each booked session gets its own event; that day's due review count per topic ("2 reviews due (dutch)", never
-the prompts: seeing them ahead spoils cold retrieval, so they appear only at session start) rides with the day's
-first session, or gets a review-only event. Events are packed into the owner's slots in `slots.json`:
-- weekdays: 07:45–08:30 (brief) and 20:30–21:15;
-- weekends: 10:00–12:00 and 19:30–21:30.
-
-Sync procedure:
-1. Run `python $S/learn.py plan`, which prints create/update/delete actions.
-2. With the Google Calendar connector (Claude):
-   - create: pass `summary`, `startTime`, `endTime` and `description` as given, with no time zone and
-     a popup reminder at 5 minutes. Then run `learn.py cal record <key> <event id>`.
-   - update: change the event the same way, then record it again.
-   - delete: delete the event, then run `cal forget <key>`.
-3. Without the connector (Codex, pi), tell the owner the calendar sync is pending; `status` keeps
-   showing the drift until a Claude session applies it.
-
-Pausing a topic (`topic set <slug> --status paused`) removes its future events on the next sync.
+`learn.py plan` and `cal record|forget` still exist and are tested, but nothing in a session calls them while
+this is off. If the owner turns events back on, the old procedure is in git history (SKILL.md before 2026-11-09): one event
+per booked session in the `slots.json` slots, due-review *counts* only (never prompts), synced through the
+Google Calendar connector.
 
 ## Feedback on this skill
 
@@ -398,9 +414,9 @@ Simulations and analysis run on the owner's desktop:
 
 | Script | Use |
 | --- | --- |
-| `learn.py` | State: `init`, `status`, `topic`, `review`, `plan`, `cal`, `feedback`, `selftest`. Stdlib only. |
+| `learn.py` | State: `init`, `status`, `topic`, `review` (`result --retry` for repairs), `stamp` (review fingerprints), `prep-check`, `ready-check`, `feedback`, `plan`/`cal` (calendar, off), `selftest` (includes pinned doc numbers, `DOC_PINS`). Stdlib only. |
 | `check_page.py` | Pre-publish check of a study page: inline and local `<script src>` scripts parse (`node --check`) with no raw U+2028/2029/FEFF/200B-200F/NUL; a missing local src fails; unique `textarea[data-q]`; answer boxes need a submit script; warns on one `.box.q` with several loose textareas. Prints the `files` map to publish. Runs `check_explanations.py` (mechanical) too; `--review` adds its model review. `--assets DIR` (default `assets/`). Stdlib only; `--selftest`. |
-| `check_explanations.py` | Explanation gate for `data-explain` blocks: first `<p>` is motivation with a `data-role="why"` hook (not a formula or mostly inline math); a `data-role="example"` precedes the first display formula; formulas without an example fail; no mostly-list blocks or paragraphs averaging < 25 words; an `.box.ask` with `data-q="Ask: ..."` directly after; a display formula outside any marked block (and outside `.box.q`) fails. `--review` sends each mechanically passing block to `ai ask ds` with the beat/textbook checklist and prints PASS/FAIL with reasons. Stdlib only; `--selftest`. |
+| `check_explanations.py` | Explanation gate for `data-explain` blocks: first `<p>` is motivation with a `data-role="why"` hook (not a formula or mostly inline math); a `data-role="example"` precedes the first display formula; formulas without an example fail; no mostly-list blocks or paragraphs averaging < 25 words; an `.box.ask` with `data-q="Ask: ..."` directly after; a display formula outside any marked block (and outside `.box.q`) fails. `--review` sends each mechanically passing block to `ai ask ds` with the beat/textbook/accuracy checklist and prints PASS/FAIL with reasons. `--calibrate [--runs N]` runs that review on labelled fixtures (`tests/explain-fixtures/`) and reports false passes, false fails and repeatability; rerun it after changing the checklist or the reviewer model. Stdlib only; `--selftest`. |
 | `render_check.py` | Loads a study page in headless Chrome with a fake `window.claude` and confirms one shared Submit button per `textarea[data-q]` and no script errors. Run by `learn.py ready-check`; `--selftest`. |
 | `midi_compare.py` | Compare a piano take with a reference `.mid`: wrong, missed and extra notes, hesitations, tempo drift, worst bars. Stdlib only; `--selftest`. |
 | `midi_capture.py` | Record a take from the silent piano's MIDI out. Needs `mido` and `python-rtmidi`; unverified until the piano is connected. |

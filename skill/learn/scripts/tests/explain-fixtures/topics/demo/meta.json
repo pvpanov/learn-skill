@@ -1,0 +1,6 @@
+{
+  "slug": "demo",
+  "type": "concept",
+  "goal": "make sound everyday modelling and experiment-design decisions in applied data work",
+  "note": "Calibration fixtures for check_explanations.py --calibrate. good-*.html must PASS the model review, bad-*.html must FAIL it; all pass the mechanical gate."
+}

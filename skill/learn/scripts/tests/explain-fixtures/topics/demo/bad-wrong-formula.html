@@ -1,0 +1,11 @@
+<!doctype html><html><body>
+<div class="box" data-explain="W1">
+  <p data-role="why">You ran an A/B test with 400 users in each arm and the confidence interval on the difference is too wide to decide anything, so you need to know how many users would make it narrow enough. The answer decides whether the test runs one more week or two more months.</p>
+  <p data-role="example">Here is the concrete case. Each user's outcome has a standard deviation of 10, there are 400 users in an arm, and you want the interval on that arm's mean to be half as wide as it is now. New users arrive at 400 per arm per week.</p>
+  <p>The width of the interval is proportional to the standard error of the mean, and the standard error is the standard deviation of the individual outcomes divided by the number of users:</p>
+  \[ \mathrm{SE} = \sigma / n \]
+  <p>In the example, a standard deviation of 10 and 400 users give a standard error of 10 / 400 = 0.025. Because the number of users sits in the denominator, the standard error falls in proportion to the sample size: doubling the sample halves it. To bring the standard error from 0.025 down to 0.0125, and so halve the interval, you need 800 users per arm, twice what you have now. At 400 new users per arm per week, that is one more week of running the test.</p>
+  <p>The takeaway for your planning: when an interval is twice as wide as you need, plan for twice the sample, so a test that is close to conclusive needs only a short extension rather than a long new run, and you can tell the team it will finish next week.</p>
+</div>
+<div class="box ask"><textarea data-q="Ask: W1"></textarea></div>
+</body></html>

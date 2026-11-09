@@ -1,0 +1,13 @@
+{
+  "name": "smoke: sklearn breast cancer, iid",
+  "csv": "../data/sklearn/breast_cancer.csv",
+  "target": "target",
+  "positive": 1,
+  "task": "classification",
+  "split": "random",
+  "test_frac": 0.3,
+  "metric": "auc",
+  "drop": [],
+  "seed": 0,
+  "why": "harness smoke test only; random split is right for iid patients"
+}

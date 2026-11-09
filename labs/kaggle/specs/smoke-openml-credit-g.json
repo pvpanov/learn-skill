@@ -1,0 +1,12 @@
+{
+  "name": "smoke: OpenML task 31 (credit-g), predefined fold 0",
+  "source": {"openml_task": 31},
+  "target": "class",
+  "positive": "bad",
+  "task": "classification",
+  "split": "openml",
+  "metric": "auc",
+  "drop": [],
+  "seed": 0,
+  "why": "harness smoke test of the OpenML path (task split, categorical columns); not an experiment"
+}

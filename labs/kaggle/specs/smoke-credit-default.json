@@ -1,0 +1,15 @@
+{
+  "name": "smoke: Taiwan credit card default (Kaggle uciml), iid, >10k rows",
+  "csv": "../data/default-of-credit-card-clients-dataset/UCI_Credit_Card.csv",
+  "target": "default.payment.next.month",
+  "positive": 1,
+  "task": "classification",
+  "split": "random",
+  "test_frac": 0.15,
+  "metric": "auc",
+  "drop": [
+    "ID"
+  ],
+  "seed": 0,
+  "why": "harness smoke test on real Kaggle data; exercises the 10k TabPFN subsample path; test_frac 0.15 keeps the run under 2 min"
+}

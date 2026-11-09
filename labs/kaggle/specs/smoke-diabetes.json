@@ -1,0 +1,12 @@
+{
+  "name": "smoke: sklearn diabetes, regression",
+  "csv": "../data/sklearn/diabetes.csv",
+  "target": "target",
+  "task": "regression",
+  "split": "random",
+  "test_frac": 0.3,
+  "metric": "rmse",
+  "drop": [],
+  "seed": 0,
+  "why": "harness smoke test only (regression path)"
+}

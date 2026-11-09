@@ -1,0 +1,98 @@
+<title>Topic Study Sheet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- learn study-page skeleton (owner, 2026-11-09). Copy to topics/<slug>/page/<name>.html, fill, run check_page.py.
+     Publish: files {"submit-to-tutor.js": "<this skill>/assets/submit-to-tutor.js"},
+     capabilities {comments: {}} (add db etc. if the page also uses them). No review answers or criteria on the page. -->
+<style>
+:root {
+  --bg: #f5f7f8; --surface: #ffffff; --fg: #1b2328; --muted: #5a6872; --line: #d8dfe3;
+  --accent: #0f6e78; --accent-soft: #e2f1f2;
+  --body: system-ui, sans-serif; --mono: Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12181b; --surface: #1a2226; --fg: #e3e9ec; --muted: #9aa8b0; --line: #2c373d;
+  --accent: #5cc2cc; --accent-soft: #173438; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12181b; --surface: #1a2226; --fg: #e3e9ec; --muted: #9aa8b0; --line: #2c373d;
+  --accent: #5cc2cc; --accent-soft: #173438; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+.wrap { max-width: 46rem; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 28px; }
+h1, h2 { margin: 0; line-height: 1.25; text-wrap: balance; }
+p, ol, ul { margin: 0; }
+.eyebrow { font: 500 0.75rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 14px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.q { border-left: 3px solid var(--accent); }
+.q .kind { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.eg { background: var(--accent-soft); border-radius: 6px; padding: 8px 12px; }
+.part { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--line); padding-top: 10px; }
+textarea { width: 100%; box-sizing: border-box; min-height: 5.5rem; resize: vertical; font: 15px/1.5 var(--body); color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button { font: 600 0.95rem var(--body); color: var(--bg); background: var(--accent); border: 0; border-radius: 6px; padding: 10px 16px; cursor: pointer; }
+button:disabled { opacity: 0.55; cursor: default; }
+.status { color: var(--muted); font-size: 0.9rem; }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <span class="eyebrow">Learning · Topic</span>
+    <h1>Topic Study Sheet</h1>
+    <p>Write each answer in its box and press <strong>Submit to tutor</strong> under it; the reply comes back in that box's comment thread.</p>
+  </header>
+
+  <section>
+    <span class="eyebrow">Where we are</span>
+    <div class="box"><p>2–4 lines from log.md: what was done last time, what today covers.</p></div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Cold review</span>
+    <div class="box q">
+      <span class="kind">r000 · Recall</span>
+      <p>The review prompt, never its criterion.</p>
+      <textarea data-q="r000" aria-label="Answer to r000"></textarea>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Explanation</span>
+    <h2>S1. Concept, as the question it answers for you</h2>
+    <!-- Explanation block (owner, 2026-11-09): data-explain="<id>", connected textbook prose, in this beat order:
+         (1) why: the motivating question in the owner's world, first <p>, data-role="why";
+         (2) example: one running concrete example at once, data-role="example";
+         (3) theory interleaved with that example, with numbers; each formula followed by what it means in it;
+         (4) the takeaway for the owner's decision; (5) the check (a .box.q after the Ask box).
+         Every block is followed directly by its .box.ask. check_page.py fails a block that breaks this. -->
+    <div class="box" data-explain="S1">
+      <p data-role="why"><strong>Why this matters for you.</strong> The decision in the owner's own work that this concept changes, posed as the question they would actually ask, so that the reason to read on is clear before any definition, notation or formula appears.</p>
+      <p data-role="example"><strong>The running example.</strong> One small concrete case from the owner's world, with actual numbers, introduced here before any display formula, and small enough that every later step can be worked through on it by hand.</p>
+      <p>The first piece of theory: set up the problem, define each term before using it, say in words why each step follows from the previous one (no formal proof unless asked), and after every formula say what it means in the running example.</p>
+      <p><strong>The takeaway for your decision.</strong> What the owner should do or choose differently now that the conclusion has been reached by the reasoning above, stated in terms of the same example and their own work.</p>
+    </div>
+    <div class="box ask">
+      <span class="kind">Ask about this</span>
+      <p>Anything unclear or worth going deeper on in S1? Ask here; the answer comes back in this box's thread.</p>
+      <textarea data-q="Ask: S1" aria-label="Question about S1"></textarea>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Activity</span>
+    <div class="box q">
+      <span class="kind">Q1 · Application</span>
+      <p>Stem shared by the parts (sent with each part's answer).</p>
+      <div class="eg">A concrete example first.</div>
+      <div class="part"><p><strong>(a)</strong> First sub-question.</p>
+        <textarea data-q="Q1a" aria-label="Answer to Q1 (a)"></textarea></div>
+      <div class="part"><p><strong>(b)</strong> Second sub-question.</p>
+        <textarea data-q="Q1b" aria-label="Answer to Q1 (b)"></textarea></div>
+    </div>
+    <div class="bar"><button type="button" data-tutor-copy-all>Copy all my answers</button></div>
+  </section>
+</div>
+
+<script src="submit-to-tutor.js" data-drafts="topic-sheet-YYYY-MM-DD"></script>

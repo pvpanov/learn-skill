@@ -111,7 +111,7 @@ questioning shows it is known well).
 
 ## Borrowed from existing tutor skills
 
-- **sigma** (`github.com/sanyuan0704/code-review-expert`): counterexamples for misconceptions; a
+- **sigma** (`github.com/sanyuan0704/sanyuan-skills`): counterexamples for misconceptions; a
   discrimination exit test; recording profile patterns only after two sessions; interleaving.
 - **teach** (`github.com/mattpocock/skills`): ground everything in the owner's why ("what do you
   want out of this"); "never trust parametric knowledge" (paper source discipline).
